@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLVM如何将文件读入内存 –llvm::MemoryBuffer &mdash; learning-notes v0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../_static/documentation_options.js?v=34cd777e"></script>
+        <script src="../_static/doctools.js?v=888ff710"></script>
+        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="prev" title="Welcome to llvm-learning-notes’s documentation!" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            learning-notes
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Welcome to llvm-learning-notes’s documentation!</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">LLVM如何将文件读入内存 –<code class="docutils literal notranslate"><span class="pre">llvm::MemoryBuffer</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#c">一、C++将文件读入内存</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#id1">传统读取文件到内存的方式</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#mmap-2">使用 mmap(2) 将大文件读入内存</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#llvm-llvm-memorybuffer-getfileorstdin">二、LLVM读文件的实现：llvm::MemoryBuffer::getFileOrSTDIN</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#llvm">LLVM文件系统</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#id2">LLVM 中的系统调用的跨平台实现</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#reading-the-file-into-an-llvm-writablememorybuffer">Reading the file into an <code class="docutils literal notranslate"><span class="pre">llvm::WritableMemoryBuffer</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="index.html#indices-and-tables">Indices and tables</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">learning-notes</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">Welcome to llvm-learning-notes’s documentation!</a></li>
+      <li class="breadcrumb-item active">LLVM如何将文件读入内存 –<code class="docutils literal notranslate"><span class="pre">llvm::MemoryBuffer</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/llvm/memorybuffer.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="llvm-llvm-memorybuffer">
+<h1>LLVM如何将文件读入内存 –<code class="docutils literal notranslate"><span class="pre">llvm::MemoryBuffer</span></code><a class="headerlink" href="#llvm-llvm-memorybuffer" title="Link to this heading"></a></h1>
+<blockquote>
+<div><p class="linemarker linemarker-5">本文是对<a class="reference external" href="https://modocache.io/llvm-memory-buffer">How Swift and Clang Use LLVM to Read Files into Memory</a>的学习，加上自己的笔记，更新为llvm17.0.0的源码。英语不错的小伙伴可以直接阅读原文。</p>
+</div></blockquote>
+<p class="linemarker linemarker-7"><code class="docutils literal notranslate"><span class="pre">llvm::MemoryBuffer</span></code>是将文件或流读入内存的主要抽象类。由于它经常被 Swift、Clang 和 LLVM 等工具（如 llvm-tblgen）使用，了解它的工作原理非常有价值。</p>
+<p class="linemarker linemarker-9">比如，<code class="docutils literal notranslate"><span class="pre">llvm::MemoryBuffer</span></code>会传递给<code class="docutils literal notranslate"><span class="pre">llvm::SourceMgr</span></code>，以便在缓冲区的特定位置发出诊断信息。</p>
+<section id="c">
+<h2>一、C++将文件读入内存<a class="headerlink" href="#c" title="Link to this heading"></a></h2>
+<p class="linemarker linemarker-13">作者首先在第一章介绍了c++读取文件的两种方式：</p>
+<p class="linemarker linemarker-15">https://llvm.org/doxygen/classllvm_1_1MemoryBuffer.html</p>
+<p class="linemarker linemarker-17">libLLVMSupport的llvm::MemoryBuffer类的文档表示它“提供对内存块的简单只读访问，并提供将文件和标准输入读入内存缓冲区的简单方法。”为了更好地理解它是如何做到的，我尝试编写了一个简单的C++程序，名为read.cpp，它将一个文件 - 在这种情况下是它自己 - 读入内存中。为了简单起见，我的程序仅适用于Unix系统。</p>
+<section id="id1">
+<h3>传统读取文件到内存的方式<a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
+<p class="linemarker linemarker-21">读取文件的调用四个系统函数：</p>
+<ol class="simple">
+<li><p class="linemarker linemarker-23"><a class="reference external" href="http://man7.org/linux/man-pages/man2/open.2.html"><code class="docutils literal notranslate"><span class="pre">open(2)</span></code></a>：用于获取文件的文件描述符。</p></li>
+<li><p class="linemarker linemarker-24"><a class="reference external" href="http://man7.org/linux/man-pages/man2/stat.2.html"><code class="docutils literal notranslate"><span class="pre">fstat</span></code></a>：返回与文件描述符相关的信息。比如文件的size。</p></li>
+<li><p class="linemarker linemarker-25"><a class="reference external" href="http://man7.org/linux/man-pages/man2/read.2.html"><code class="docutils literal notranslate"><span class="pre">read(2)</span></code></a>：从文件中读取指定数量的字节到预先分配的内存块中。</p></li>
+<li><p class="linemarker linemarker-26"><a class="reference external" href="http://man7.org/linux/man-pages/man2/close.2.html"><code class="docutils literal notranslate"><span class="pre">close(2)</span></code></a>：用于在使用完文件描述符后关闭文件。</p></li>
+</ol>
+<p class="linemarker linemarker-28">作者写了一个<code class="docutils literal notranslate"><span class="pre">read.cpp</span></code> 程序的例子：分配内存并将其自身的源文件读入该内存中，并打印出文件的第一行。实际上，这与<code class="docutils literal notranslate"><span class="pre">llvm::MemoryBuffer::getFile</span></code>函数非常相似。但是还有改进的空间。</p>
+</section>
+<section id="mmap-2">
+<h3>使用 mmap(2) 将大文件读入内存<a class="headerlink" href="#mmap-2" title="Link to this heading"></a></h3>
+<p class="linemarker linemarker-32">回想一下，我们使用<code class="docutils literal notranslate"><span class="pre">new</span></code>运算符在堆上分配了内存，然后使用系统调用 read(2) 来将文件的内容填充到该内存中：如果我们需要读取一个非常大的文件到内存中，这种分配方式就会有问题。一个大小为1GB的文件会导致分配1GB的内存空间，这是相当大的RAM！</p>
+<p class="linemarker linemarker-34">作者在<code class="docutils literal notranslate"><span class="pre">read.cpp</span></code> 程序中加上了<code class="docutils literal notranslate"><span class="pre">mmap(2)</span></code>的使用。</p>
+<p class="linemarker linemarker-36">这篇博客详细介绍了<code class="docutils literal notranslate"><span class="pre">mmap</span></code>的原理：<a class="reference external" href="https://www.cnblogs.com/huxiao-tee/p/4660352.html">认真分析mmap：是什么 为什么 怎么用 </a></p>
+<ul class="simple">
+<li><p class="linemarker linemarker-38"><code class="docutils literal notranslate"><span class="pre">mmap(2)</span></code> 允许我们一次读取文件的部分位。<strong>常规文件操作需要从磁盘到页缓存再到用户主存的两次数据拷贝。而mmap操控文件，只需要从磁盘到用户主存的一次数据拷贝过程。</strong></p></li>
+<li><p class="linemarker linemarker-40">当读写磁盘文件的数据较小(少于1MB)时候，使用内存文件映射和普通IO是差异很小的，所以建议使用普通IO就可以了；<strong>当很多文件的大小在几十MB, 几百MB, 或者1GB以上的文件数据需要进行较频繁的访问，或者一开始需要全部加载这些大文件的时候，那么就需要考虑使用内存文件映射了。</strong></p></li>
+</ul>
+<p class="linemarker linemarker-42">回到文章</p>
+<p class="linemarker linemarker-44">大多数情况下，<code class="docutils literal notranslate"><span class="pre">llvm::MemoryBuffer</span></code> 的工作方式与上面的<code class="docutils literal notranslate"> <span class="pre">read.cpp</span></code> 程序完全相同。它还有一些额外的功能：可以在 Unix 和 Windows 上运行，使用更复杂的启发式来决定是否使用 <code class="docutils literal notranslate"><span class="pre">mmap(2)</span></code>，并且在支持它们的平台上使用一些有趣的系统调用和选项。会在下面详细介绍这些内容。</p>
+</section>
+</section>
+<section id="llvm-llvm-memorybuffer-getfileorstdin">
+<h2>二、LLVM读文件的实现：llvm::MemoryBuffer::getFileOrSTDIN<a class="headerlink" href="#llvm-llvm-memorybuffer-getfileorstdin" title="Link to this heading"></a></h2>
+<p class="linemarker linemarker-48"><code class="docutils literal notranslate"><span class="pre">llvm::MemoryBuffer::getFileOrSTDIN</span></code>函数返回给定文件的 <code class="docutils literal notranslate"><span class="pre">llvm::MemoryBuffer``std::unique_ptr</span></code>，或者返回y一个<code class="docutils literal notranslate"><span class="pre">llvm::ErrorOr</span></code>类型表示。（关于<code class="docutils literal notranslate"><span class="pre">llvm::ErrorOr</span></code>的内容，可以观看 <a class="reference external" href="https://www.youtube.com/watch?v=Wq8fNK98WGw">LLVM Developers Meeting 2016 </a>了解更多信息。）</p>
+<p class="linemarker linemarker-50"><a class="reference external" href="https://github.com/Laity000/llvm-project/blob/llvmorg-17.0.0/llvm/include/llvm/Support/MemoryBuffer.h#L147-L152">llvm/include/llvm/Support/MemoryBuffer.h</a></p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="w">  </span><span class="c1">/// Open the specified file as a MemoryBuffer, or open stdin if the Filename</span>
+<span class="w">  </span><span class="c1">/// is &quot;-&quot;.</span>
+<span class="w">  </span><span class="k">static</span><span class="w"> </span><span class="n">ErrorOr</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">MemoryBuffer</span><span class="o">&gt;&gt;</span>
+<span class="w">  </span><span class="n">getFileOrSTDIN</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Twine</span><span class="w"> </span><span class="o">&amp;</span><span class="n">Filename</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">IsText</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">,</span>
+<span class="w">                 </span><span class="kt">bool</span><span class="w"> </span><span class="n">RequiresNullTerminator</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">,</span>
+<span class="w">                 </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">Align</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Alignment</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">nullopt</span><span class="p">);</span>
+</pre></div>
+</div>
+<p class="linemarker linemarker-59"><a class="reference external" href="https://github.com/Laity000/llvm-project/blob/llvmorg-17.0.0/llvm/lib/Support/MemoryBuffer.cpp#L155-L166">llvm/lib/Support/MemoryBuffer.cpp</a></p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="n">ErrorOr</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">MemoryBuffer</span><span class="o">&gt;&gt;</span>
+<span class="n">MemoryBuffer</span><span class="o">::</span><span class="n">getFileOrSTDIN</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Twine</span><span class="w"> </span><span class="o">&amp;</span><span class="n">Filename</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">IsText</span><span class="p">,</span>
+<span class="w">                             </span><span class="kt">bool</span><span class="w"> </span><span class="n">RequiresNullTerminator</span><span class="p">,</span>
+<span class="w">                             </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">Align</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Alignment</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">SmallString</span><span class="o">&lt;</span><span class="mi">256</span><span class="o">&gt;</span><span class="w"> </span><span class="n">NameBuf</span><span class="p">;</span>
+<span class="w">  </span><span class="n">StringRef</span><span class="w"> </span><span class="n">NameRef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Filename</span><span class="p">.</span><span class="n">toStringRef</span><span class="p">(</span><span class="n">NameBuf</span><span class="p">);</span>
+
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">NameRef</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">&quot;-&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">getSTDIN</span><span class="p">();</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">getFile</span><span class="p">(</span><span class="n">Filename</span><span class="p">,</span><span class="w"> </span><span class="n">IsText</span><span class="p">,</span><span class="w"> </span><span class="n">RequiresNullTerminator</span><span class="p">,</span>
+<span class="w">                 </span><span class="cm">/*IsVolatile=*/</span><span class="nb">false</span><span class="p">,</span><span class="w"> </span><span class="n">Alignment</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p class="linemarker linemarker-75"><code class="docutils literal notranslate"><span class="pre">getFileOrSTDIN</span></code>函数只是检查文件名是否为“-”，然后将其逻辑交给<code class="docutils literal notranslate"><span class="pre">llvm::MemoryBuffer::getSTDIN</span></code>或<code class="docutils literal notranslate"><span class="pre">getFile</span></code>。</p>
+<p class="linemarker linemarker-77">https://github.com/Laity000/llvm-project/blob/llvmorg-17.0.0/llvm/lib/Support/MemoryBuffer.cpp#L252-L281</p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="n">ErrorOr</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">MemoryBuffer</span><span class="o">&gt;&gt;</span>
+<span class="n">MemoryBuffer</span><span class="o">::</span><span class="n">getFile</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Twine</span><span class="w"> </span><span class="o">&amp;</span><span class="n">Filename</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">IsText</span><span class="p">,</span>
+<span class="w">                      </span><span class="kt">bool</span><span class="w"> </span><span class="n">RequiresNullTerminator</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">IsVolatile</span><span class="p">,</span>
+<span class="w">                      </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">Align</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Alignment</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">getFileAux</span><span class="o">&lt;</span><span class="n">MemoryBuffer</span><span class="o">&gt;</span><span class="p">(</span><span class="n">Filename</span><span class="p">,</span><span class="w"> </span><span class="cm">/*MapSize=*/</span><span class="mi">-1</span><span class="p">,</span><span class="w"> </span><span class="cm">/*Offset=*/</span><span class="mi">0</span><span class="p">,</span>
+<span class="w">                                  </span><span class="n">IsText</span><span class="p">,</span><span class="w"> </span><span class="n">RequiresNullTerminator</span><span class="p">,</span><span class="w"> </span><span class="n">IsVolatile</span><span class="p">,</span>
+<span class="w">                                  </span><span class="n">Alignment</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">MB</span><span class="o">&gt;</span>
+<span class="k">static</span><span class="w"> </span><span class="n">ErrorOr</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">MB</span><span class="o">&gt;&gt;</span>
+<span class="n">getFileAux</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Twine</span><span class="w"> </span><span class="o">&amp;</span><span class="n">Filename</span><span class="p">,</span><span class="w"> </span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">MapSize</span><span class="p">,</span><span class="w"> </span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">Offset</span><span class="p">,</span>
+<span class="w">           </span><span class="kt">bool</span><span class="w"> </span><span class="n">IsText</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">RequiresNullTerminator</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">IsVolatile</span><span class="p">,</span>
+<span class="w">           </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">Align</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Alignment</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">Expected</span><span class="o">&lt;</span><span class="n">sys</span><span class="o">::</span><span class="n">fs</span><span class="o">::</span><span class="n">file_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">FDOrErr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sys</span><span class="o">::</span><span class="n">fs</span><span class="o">::</span><span class="n">openNativeFileForRead</span><span class="p">(</span>
+<span class="w">      </span><span class="n">Filename</span><span class="p">,</span><span class="w"> </span><span class="n">IsText</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">sys</span><span class="o">::</span><span class="n">fs</span><span class="o">::</span><span class="n">OF_TextWithCRLF</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">sys</span><span class="o">::</span><span class="n">fs</span><span class="o">::</span><span class="n">OF_None</span><span class="p">);</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">FDOrErr</span><span class="p">)</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">errorToErrorCode</span><span class="p">(</span><span class="n">FDOrErr</span><span class="p">.</span><span class="n">takeError</span><span class="p">());</span>
+<span class="w">  </span><span class="n">sys</span><span class="o">::</span><span class="n">fs</span><span class="o">::</span><span class="n">file_t</span><span class="w"> </span><span class="n">FD</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">*</span><span class="n">FDOrErr</span><span class="p">;</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">Ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getOpenFileImpl</span><span class="o">&lt;</span><span class="n">MB</span><span class="o">&gt;</span><span class="p">(</span><span class="n">FD</span><span class="p">,</span><span class="w"> </span><span class="n">Filename</span><span class="p">,</span><span class="w"> </span><span class="cm">/*FileSize=*/</span><span class="mi">-1</span><span class="p">,</span><span class="w"> </span><span class="n">MapSize</span><span class="p">,</span><span class="w"> </span><span class="n">Offset</span><span class="p">,</span>
+<span class="w">                                 </span><span class="n">RequiresNullTerminator</span><span class="p">,</span><span class="w"> </span><span class="n">IsVolatile</span><span class="p">,</span><span class="w"> </span><span class="n">Alignment</span><span class="p">);</span>
+<span class="w">  </span><span class="n">sys</span><span class="o">::</span><span class="n">fs</span><span class="o">::</span><span class="n">closeFile</span><span class="p">(</span><span class="n">FD</span><span class="p">);</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">Ret</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p class="linemarker linemarker-105">这里我们重点看下<code class="docutils literal notranslate"><span class="pre">getFile</span></code>函数，委托给一个名为<code class="docutils literal notranslate"><span class="pre">getFileAux</span></code>局部静态函数。实现了上面的 <code class="docutils literal notranslate"><span class="pre">read.cpp</span></code> 示例中的一些逻辑：打开文件以获取文件描述符，读取该文件，然后调用<code class="docutils literal notranslate"><span class="pre">close(2)</span></code>以关闭文件描述符。·</p>
+</section>
+<section id="llvm">
+<h2>LLVM文件系统<a class="headerlink" href="#llvm" title="Link to this heading"></a></h2>
+<p class="linemarker linemarker-109">但是<code class="docutils literal notranslate"><span class="pre">getFileAux</span></code>函数不会直接调用<code class="docutils literal notranslate"><span class="pre">open(2)</span></code>系统调用来获取给定文件名的打开文件描述符。相反，它使用<code class="docutils literal notranslate"><span class="pre">llvm::sys::fs::openNativeFileForRead</span></code>函数。这个LLVM辅助函数与<code class="docutils literal notranslate"><span class="pre">open(2)</span></code>不同，可以在Windows和Unix平台上工作。</p>
+<p class="linemarker linemarker-111">下面这里FileSystem.h头文件，和<code class="docutils literal notranslate"><span class="pre">llvm::sys::fs::openNativeFileForRead</span></code>函数声明，根据平台的类型不同分别在<code class="docutils literal notranslate"><span class="pre">llvm/lib/Support/Unix/Path.inc</span></code>和<code class="docutils literal notranslate"><span class="pre">llvm/lib/Support/Windows/Path.inc</span></code>中各自实现</p>
+<p class="linemarker linemarker-113"><a class="reference external" href="https://github.com/Laity000/llvm-project/blob/llvmorg-17.0.0/llvm/include/llvm/Support/FileSystem.h#L1133-L1165">llvm/include/llvm/Support/FileSystem.h</a></p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="c1">// This file declares the llvm::sys::fs namespace. It is designed after</span>
+<span class="c1">// TR2/boost filesystem (v3), but modified to remove exception handling and the</span>
+<span class="c1">// path class.</span>
+<span class="cp">#if defined(_WIN32)</span>
+<span class="c1">// A Win32 HANDLE is a typedef of void*</span>
+<span class="k">using</span><span class="w"> </span><span class="n">file_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="o">*</span><span class="p">;</span>
+<span class="cp">#else</span>
+<span class="k">using</span><span class="w"> </span><span class="n">file_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">int</span><span class="p">;</span>
+<span class="cp">#endif</span>
+
+<span class="p">...</span><span class="w"> </span>
+
+<span class="c1">/// @brief Opens the file with the given name in a read-only mode, returning</span>
+<span class="c1">/// its open file descriptor.</span>
+<span class="c1">/// @returns a platform-specific file descriptor if \a Name has been opened,</span>
+<span class="c1">///          otherwise an error object.</span>
+<span class="n">Expected</span><span class="o">&lt;</span><span class="n">file_t</span><span class="o">&gt;</span>
+<span class="n">openNativeFileForRead</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Twine</span><span class="w"> </span><span class="o">&amp;</span><span class="n">Name</span><span class="p">,</span><span class="w"> </span><span class="n">OpenFlags</span><span class="w"> </span><span class="n">Flags</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OF_None</span><span class="p">,</span>
+<span class="w">                      </span><span class="n">SmallVectorImpl</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">&gt;</span><span class="w"> </span><span class="o">*</span><span class="n">RealPath</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">);</span>
+
+<span class="c1">/// @brief Opens the file with the given name in a read-only mode, returning</span>
+<span class="c1">/// its open file descriptor.</span>
+<span class="c1">/// @param Name The path of the file to open, relative or absolute.</span>
+<span class="c1">/// @param ResultFD If the file could be opened successfully, its descriptor</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">error_code</span><span class="w"> </span><span class="nf">openFileForRead</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Twine</span><span class="w"> </span><span class="o">&amp;</span><span class="n">Name</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="o">&amp;</span><span class="n">ResultFD</span><span class="p">,</span>
+<span class="w">                                </span><span class="n">OpenFlags</span><span class="w"> </span><span class="n">Flags</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OF_None</span><span class="p">,</span>
+<span class="w">                                </span><span class="n">SmallVectorImpl</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">&gt;</span><span class="w"> </span><span class="o">*</span><span class="n">RealPath</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">);</span>
+</pre></div>
+</div>
+<p class="linemarker linemarker-147">比如llvm/lib/Support/Unix/Path.inc，这里走的就是Unix平台的。最终会产生一个文件描述符<code class="docutils literal notranslate"><span class="pre">file_t</span> <span class="pre">ResultFD</span></code></p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="n">Expected</span><span class="o">&lt;</span><span class="n">file_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">openNativeFileForRead</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Twine</span><span class="w"> </span><span class="o">&amp;</span><span class="n">Name</span><span class="p">,</span><span class="w"> </span><span class="n">OpenFlags</span><span class="w"> </span><span class="n">Flags</span><span class="p">,</span>
+<span class="w">                                       </span><span class="n">SmallVectorImpl</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">&gt;</span><span class="w"> </span><span class="o">*</span><span class="n">RealPath</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">file_t</span><span class="w"> </span><span class="n">ResultFD</span><span class="p">;</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">error_code</span><span class="w"> </span><span class="n">EC</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">openFileForRead</span><span class="p">(</span><span class="n">Name</span><span class="p">,</span><span class="w"> </span><span class="n">ResultFD</span><span class="p">,</span><span class="w"> </span><span class="n">Flags</span><span class="p">,</span><span class="w"> </span><span class="n">RealPath</span><span class="p">);</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">EC</span><span class="p">)</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">errorCodeToError</span><span class="p">(</span><span class="n">EC</span><span class="p">);</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">ResultFD</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<section id="id2">
+<h3>LLVM 中的系统调用的跨平台实现<a class="headerlink" href="#id2" title="Link to this heading"></a></h3>
+</section>
+</section>
+<section id="reading-the-file-into-an-llvm-writablememorybuffer">
+<h2>Reading the file into an <code class="docutils literal notranslate"><span class="pre">llvm::WritableMemoryBuffer</span></code><a class="headerlink" href="#reading-the-file-into-an-llvm-writablememorybuffer" title="Link to this heading"></a></h2>
+<p class="linemarker linemarker-163">llvm::sys::fs::openFileForRead函数打开一个文件并返回其文件描述符。然后控制返回到getFileAux函数，该函数将打开的描述符传递给getOpenFileImpl静态函数。</p>
+<p class="linemarker linemarker-167">getOpenFileImpl实现了本文开头的read.cpp示例中的相同逻辑。如果未提供文件大小，则通过调用llvm::sys::fs::status来找出文件的大小，该函数在Unix系统中调用fstat。然后，它会根据情况决定是使用mmap(2)还是使用operator new提前分配内存。如果它分配了内存，那么它将使用系统调用read(2)（如果HAVE_PREAD为true，则使用pread）来将文件的字节读入内存中。</p>
+<p class="linemarker linemarker-171">llvm::sys::Process::getPageSize和llvm::sys::fs::status函数上面使用了与llvm::sys::fs::openFileForRead相同的CMake技巧，以包含平台特定的实现：getPageSize在llvm/lib/Support/Unix/Process.inc和Windows/Process.inc中实现，而status在Unix/Path.inc和Windows/Path.inc中实现。在Unix上，它们使用系统调用getpagesize和fstat来从操作系统获取所需的信息。</p>
+<p class="linemarker linemarker-175">上面的代码根据辅助函数 shouldUseMMap 返回 true 还是 false，实例化了 llvm::MemoryBufferMMapFile 或 llvm::WritableMemoryBuffer。就像在本文开头的 read.cpp 示例中一样，决定使用哪种方式的一个标准是文件的大小 - 例如，如果文件大小小于系统上的一页，或小于16千字节，则不使用 mmap(2)：</p>
+<ol class="simple">
+<li><p class="linemarker linemarker-179">1.通过火焰图和dump时间初步发现性能瓶颈是在对ld文件的anltr parser。</p></li>
+<li><p class="linemarker linemarker-180">2.分析了下发现是ld中有对label_stmt语句的parser性能很差，比如最差的，删除label之后213291ms–&gt;414ms，恢复到正常水平</p></li>
+<li><p class="linemarker linemarker-181">3.后面需要具体分析下原因看怎么改</p></li>
+</ol>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="Welcome to llvm-learning-notes’s documentation!" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, laity000.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
