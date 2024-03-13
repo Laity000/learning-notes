@@ -12,8 +12,6 @@ Welcome to learning-notes's documentation!
 
    llvm/index
 
-
-
 Indices and tables
 ==================
 

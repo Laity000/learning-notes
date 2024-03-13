@@ -1,3 +1,16 @@
 build/
 .DS_Store
 .vscode
+*.pyc
+*.egg-info
+_build
+source/_build
+_readthedocs_build
+autoapi
+_build_rtd
+.idea/
+.tox
+.cache
+.python-version
+dist
+tags
