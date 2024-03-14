@@ -2,14 +2,41 @@
 
 # LLVM如何将文件读入内存——`llvm::MemoryBuffer`源码解析
 
-> 本文是对[How Swift and Clang Use LLVM to Read Files into Memory](https://modocache.io/llvm-memory-buffer)的学习，加上自己的笔记，更新为llvm17.0.0的源码。英语不错的小伙伴可以直接阅读原文。
+> 本文是对[How Swift and Clang Use LLVM to Read Files into Memory](https://modocache.io/llvm-memory-buffer)的学习，加上自己的笔记，并更新为llvm17.0.0的源码。英语不错的小伙伴可以直接阅读原文。
 
 `llvm::MemoryBuffer`是将文件或流读入内存的主要抽象类。由于它经常被 Swift、Clang 和 LLVM 等工具（如 llvm-tblgen）使用，了解它的工作原理非常有价值。
 
 比如，`llvm::MemoryBuffer`会传递给`llvm::SourceMgr`，以便在缓冲区的特定位置发出诊断信息。
 
 libLLVMSupport的llvm::MemoryBuffer类的文档表示它“提供对内存块的简单只读访问，并提供将文件和标准输入读入内存缓冲区的简单方法。 
+
+
 https://llvm.org/doxygen/classllvm_1_1MemoryBuffer.html
+
+## 
+## 零、概要
+
+通过本篇文章，可以了解学习到：
+
+- 学习了`getFileOrSTDIN`整个函数的流程：
+  - 函数入口：`llvm::MemoryBuffer::getFileOrSTDIN`-->`llvm::MemoryBuffer::getFile`-->`getFileAux`
+  - 打开文件以获取文件描述符：`llvm::sys::fs::openNativeFileForRead`-->`llvm::sys::RetryAfterSignal`-->`open(2)`
+  - 读取该文件:入口`getOpenFileImpl`
+ -->查看文件大小`llvm::sys::Process::getPageSizeEstimate`
+ -->判断使用哪种读取文件方式-->`shouldUseMMap`
+    1. read：分配内存`getNewUninitMemBuffer`-->读取文件`sys::fs::readNativeFileSlice` 
+    2. mmap：`MemoryBufferMMapFile`
+  - 关闭文件描述符
+- 本质上是创建`llvm::MemoryBuffer`来封装和管理整块内存，并通过`llvm::MemoryBuffer`的`start`和`end`指针映射到文件内容的开始和结尾
+  - `read`模式本质上还是通过`operation new`分配内存给文件，内存位置就紧邻在`llvm::MemoryBuffer`后面
+
+  `
+  ·
+   上述实现根据Windows和Unix两个不同操作系统分别实现，学习了cmake中来根据操作系统平台实现不同代码，(头文件中声明同一份接口)：
+    1. 模块引入，
+    2. CMake操作系统环境变量识别
+    3. `check_symbol_exists`用法
+    4. `configure_file`用法
 
 ## 一、C++将文件读入内存
 
@@ -429,7 +456,7 @@ static bool shouldUseMmap(int FD,
 }
 ```
 
-### Step3。1：分配文件内存到`llvm::WritableMemoryBuffer`
+### Step3.1：分配文件内存到`llvm::WritableMemoryBuffer`
 
 `getOpenFileImpl`函数调用静态函数`llvm::WritableMemoryBuffer::getNewUninitMemBuffer`来分配缓冲区内存，就像`read.cpp`示例中所做的那样，使用`new`运算符。但与`read.cpp`示例程序不同的是，通过`llvm::MemoryBuffer类`来分配内存：不仅为存储文件内容的缓冲区分配内存，还为`llvm::MemoryBuffer`类的实例和文件的名称分配空间
 
@@ -631,22 +658,3 @@ mapped_file_region::~mapped_file_region() {
     ::munmap(Mapping, Size);
 }
 ```
-
-
-## 总结：
-
-- 学习了`getFileOrSTDIN`整个函数的流程：
-  - 函数入口：`llvm::MemoryBuffer::getFileOrSTDIN`-->`llvm::MemoryBuffer::getFile`-->`getFileAux`
-  - 打开文件以获取文件描述符：`llvm::sys::fs::openNativeFileForRead`-->`llvm::sys::RetryAfterSignal`-->`open(2)`
-  - 读取该文件:入口`getOpenFileImpl`
- -->查看文件大小`llvm::sys::Process::getPageSizeEstimate`
- -->判断使用哪种读取文件方式-->`shouldUseMMap`
-    1. read：分配内存`getNewUninitMemBuffer`-->读取文件`sys::fs::readNativeFileSlice` 
-    2. mmap：`MemoryBufferMMapFile`
-  - 关闭文件描述符
-- 本质上是创建`llvm::MemoryBuffer`来封装和管理整块内存，并通过`llvm::MemoryBuffer`的`start`和`end`指针映射到文件内容的开始和结尾
-- 上述实现根据Windows和Unix两个不同操作系统分别实现，学习了cmake中来根据操作系统平台实现不同代码，(头文件中声明同一份接口)：
-    1. 模块引入，
-    2. CMake 平台环境变量
-    3. `check_symbol_exists`用法
-    4. `configure_file`用法

@@ -11,6 +11,8 @@ Welcome to llvm-learning-notes's documentation!
    :caption: Contents:
 
    file_into_mem
+   llvm_ir
+   vtable
 
 Indices and tables
 ==================
