@@ -1,3 +1,4 @@
+#! https://zhuanlan.zhihu.com/p/687308019
 # c++ vtable in llvm ir
 
 
@@ -85,7 +86,7 @@ llvm ir在这里可以看到: https://godbolt.org/z/3jz34Y8a6
 
 单继承的例子这里不再介绍了。通过`多重继承`都可以了解。
 
-##多重继承的vtable in llvm ir格式
+## 多重继承的vtable in llvm ir格式
 
 ```c++
 @vtable for Mother = linkonce_odr dso_local unnamed_addr constant { [4 x ptr] } { [4 x ptr] [ 
@@ -140,7 +141,7 @@ llvm ir在这里可以看到: https://godbolt.org/z/3jz34Y8a6
  - vtable是一个指针类型的数组，当有多重继承，子类是多维数组，比如`Child`是`[5 x ptr], [3 x ptr]`。里面的内容编译器已经帮我们填好了。
  - 第一个成员是`offset_to_top`
  - 第二个成员是`typeinfo`
- - 后面依次是函数地址，相同虚函数的偏移是固定的。这样当**通过基类指针或引用调用虚函数时**不管哪个实际类型，编译无脑加偏移就好了。
+ - 后面依次是函数地址，相同虚函数的偏移是固定的。这样当**通过基类指针或引用调用虚函数时**不管哪个实际类型，编译器无脑加偏移就好了。
 
  我们着重看下新出现的两个成员：
 
@@ -349,6 +350,7 @@ Child::FatherFoo() 里的代码指令是写死的，即对于成员变量的偏�
 而 Mother 和 Child 合用一个虚指针，所以就不会有这种问题。
 
 [thunk在c++还有其他含义](https://stackoverflow.com/questions/2641489/what-is-a-thunk)
+
 [ virtual thunk and a non virtual thunk. ](https://reverseengineering.stackexchange.com/questions/4543/what-is-a-non-virtual-thunk)
 
  ### 子类指针调用子类虚方法
