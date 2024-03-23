@@ -13,6 +13,7 @@ Welcome to llvm-learning-notes's documentation!
    file_into_mem
    llvm_ir
    vtable
+   llvm_value
 
 Indices and tables
 ==================

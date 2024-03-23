@@ -13,11 +13,13 @@
 
 ## 站在前人的基础上
 
+ - [官方介绍llvm ir的视频](https://www.youtube.com/watch?v=m8G_S5LwlTo&t=249s&ab_channel=LLVM)，强烈推荐
+
 - [LLVM IR入门指南](https://evian-zhang.github.io/llvm-ir-tutorial/index.html) ：这篇博客应该是中文里介绍llvm ir最基础的，最好的一篇了，适合入门。作者不是一上来就对llvm每个ir进行介绍，而是从体系结构的角度描述了llvm ir的整体概念。特别是第三章介绍的数据表示
 
 - [Mapping High Level Constructs to LLVM IR](https://mapping-high-level-constructs-to-llvm-ir.readthedocs.io/en/latest/index.html)：这篇博客对llvm ir介绍的十分详细，并介绍了一些c++的实现，如class，constructer，vtable。不过他ir版本有些老了，我后面会用llvm17举例
 
-- [LLVM Language Reference Manual](https://llvm.org/docs/LangRef.html#runtime-preemption-specifiers)：想要详细了解还是要看官方的百科全书
+- [LLVM Language Reference Manual](https://llvm.org/docs/LangRef.html#runtime-preemption-specifiers)：想要详细了解每个ir的language ref还是要看官方的百科全书
 
 - [A Complete Guide to LLVM for Programming Language Creators](https://mukulrathi.com/create-your-own-programming-language/llvm-ir-cpp-api-tutorial/)这篇博客介绍了如何使用api来创建llvm ir
 
@@ -25,6 +27,12 @@
 ## 自己的一些理解
 
 编译过程中无外乎涉及到的基本概念，符号，符号表，类型系统，数据布局使用。可以从这几个角度思考llvm ir的设计，加深自己的理解。
+
+llvm ir的布局：
+
+![alt text](../../png/image_llvm_ir_layout.png)
+
+上述每个部分官方视频中都有详细介绍，推荐先看一遍
 
 ### 符号与符号表
 
@@ -160,6 +168,8 @@ entry:
 ```
 
 ### vtable in llvm ir
+
+下面例子介绍的是简单的单继承ir形式，多继承的ir更复杂，我专门在这篇详细介绍了
 
 例子：https://compiler-explorer.com/z/afv6GPdPb
 

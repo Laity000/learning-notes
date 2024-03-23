@@ -14,3 +14,4 @@ _build_rtd
 .python-version
 dist
 tags
+task/
