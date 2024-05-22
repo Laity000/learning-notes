@@ -8,6 +8,8 @@
 
 - vtable的基础知识可以看这篇：[C++中虚函数、虚继承内存模型](https://zhuanlan.zhihu.com/p/41309205)，写得很详细
 
+- [What is the VTT for a class?](https://stackoverflow.com/questions/6258559/what-is-the-vtt-for-a-class)
+
 - llvm ir相关的基础知识可以参考我写的另一篇文章：[llvm ir笔记](https://laity000-learning-notes.readthedocs.io/en/latest/llvm/llvm_ir.html)
 
 
@@ -177,7 +179,7 @@ llvm ir在这里可以看到: https://godbolt.org/z/3jz34Y8a6
 
 我们知道`Child*`指针和`Father*`指针都可以调用`@Child::FatherFoo()`，反正偏移都是一样的，为什么不是直接在把`ptr @Child::FatherFoo()`覆盖到`ptr @non-virtual thunk to Child::FatherFoo()`的位置？
 
-这就涉及到前面说的：虽然在ir层面确实表示的是`FatherFoo()`函数的地址，但是，别忘了，如果实际对象是`Child*`，在调用`FatherFoo()`时首先this指针被加了`offset_to_top`=24的偏移得到vptr，后面还需要把this指针的偏移恢复后传入，不然后面其他对this指针的操作就不对了，比如访问Child的成员变量，——这就是thunk的操作。我们在后面**基类指针调用子类虚方法**章节再详细看下llvm ir的流程。
+这就涉及到前面说的：虽然在ir层面确实表示的是`FatherFoo()`函数的地址，但是，别忘了，如果实际对象是`Child*`，在调用`FatherFoo()`时首先this指针被加了`offset_to_top`=24的偏移得到vptr，后面还需要把this指针的偏移恢复后传入，不然后面调用`FatherFoo()`对this指针的操作就不对了，比如访问Child的成员变量，——这就是thunk的操作。我们在后面**基类指针调用子类虚方法**章节再详细看下llvm ir的流程。
 
 这个问题在子类vtable的主基类上是不需要的，因为`Child`指针和`Mother`共用一个this指针
 
@@ -370,7 +372,7 @@ Child::FatherFoo() 里的代码指令是写死的，即对于成员变量的偏�
 
 ## 虚继承
 
-todo
+详见另一篇笔记：https://laity000.github.io/learning-notes/llvm/vbase.html
 
 ## 引用
 
@@ -378,3 +380,5 @@ todo
 - [C++中虚函数、虚继承内存模型](https://zhuanlan.zhihu.com/p/41309205)
 - [thunk在c++还有其他含义](https://stackoverflow.com/questions/2641489/what-is-a-thunk)
 - [ virtual thunk and a non virtual thunk. ](https://reverseengineering.stackexchange.com/questions/4543/what-is-a-non-virtual-thunk)
+- [What is the VTT for a class?](https://stackoverflow.com/questions/6258559/what-is-the-vtt-for-a-class)
+- https://www.wenfh2020.com/2023/08/22/cpp-inheritance/#top

@@ -11,7 +11,9 @@ Welcome to learning-notes's documentation!
    :caption: Contents:
 
    llvm/index
-    llvm/index
+   mlir/index
+   other/index
+
 Indices and tables
 ==================
 
