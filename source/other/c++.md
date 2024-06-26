@@ -62,3 +62,50 @@ int main()
  ### PODType
 
  - std::is_trivial && std::is_standard_layout == true
+
+
+ ##  C++ 中，“常量指针”（指向常量的指针）和“指针常量”（常量指针）
+### 常量指针（指向常量的指针）
+指向常量的指针意味着指针所指向的值是常量，不能通过该指针修改值。`const int* ptr;`
+
+```cpp
+#include <iostream>
+
+int main() {
+    int value = 10;
+    const int* ptr = &value; // 指向常量的指针
+
+    std::cout << "Value: " << *ptr << std::endl;
+
+    // *ptr = 20; // 错误：不能通过指向常量的指针修改值
+
+    value = 20; // 直接修改值是允许的
+    std::cout << "Value: " << *ptr << std::endl;
+
+    return 0;
+}
+```
+在这个示例中，ptr 是一个指向常量的指针，你不能通过 *ptr 来修改 value 的值。
+
+### 指针常量（常量指针）
+常量指针意味着指针本身是常量，一旦指向了某个地址，不能再指向其他地址。语法：`int* const ptr;`
+
+```cpp
+#include <iostream>
+
+int main() {
+    int value1 = 10;
+    int value2 = 20;
+    int* const ptr = &value1; // 指针常量
+
+    std::cout << "Value1: " << *ptr << std::endl;
+
+    *ptr = 30; // 允许通过指针常量修改值
+    std::cout << "Modified Value1: " << *ptr << std::endl;
+
+    // ptr = &value2; // 错误：不能修改指针常量的地址
+
+    return 0;
+}
+```
+在这个示例中，ptr 是一个常量指针，它指向 value1，你不能将 ptr 指向其他地址，但是可以通过 *ptr 修改 value1 的值。

@@ -14,6 +14,7 @@ llvm-learning-notes's documentation!
    llvm_ir
    vtable
    llvm_value
+   compiler_principle
 
 Indices and tables
 ==================
